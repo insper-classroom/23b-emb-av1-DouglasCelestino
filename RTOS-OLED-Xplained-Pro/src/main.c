@@ -5,10 +5,15 @@
 #include <asf.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
 #include "conf_board.h"
 #include "gfx_mono_ug_2832hsweg04.h"
 #include "gfx_mono_text.h"
 #include "sysfont.h"
+
+#define NOTE_B5  988
+#define NOTE_E6  1319
 
 /************************************************************************/
 /* IOS                                                                  */
@@ -44,9 +49,12 @@ void but_callback(void);
 void but_callback(void);
 void but_callback(void);
 
+int generateRandomNumber(unsigned int seed);
+
 static void configure_console(void);
 static void task_debug(void *pvParameters);
 static void task_coins(void *pvParameters);
+static void task_play(void *pvParameters);
 
 
 
@@ -55,6 +63,12 @@ static void task_coins(void *pvParameters);
 /************************************************************************/
 
 SemaphoreHandle_t xSemaphore = NULL;
+
+/************************************************************************/
+/* Queue                                                              */
+/************************************************************************/
+
+QueueHandle_t xQueue = NULL;
 
 /************************************************************************/
 /* rtos vars                                                            */
@@ -69,6 +83,12 @@ SemaphoreHandle_t xSemaphore = NULL;
 
 #define TASK_COINS_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
 #define TASK_COINS_STACK_PRIORITY            (tskIDLE_PRIORITY)
+
+#define TASK_PLAY_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
+#define TASK_PLAY_STACK_PRIORITY            (tskIDLE_PRIORITY)
+
+
+
 
 
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,  signed char *pcTaskName);
@@ -118,12 +138,39 @@ static void task_debug(void *pvParameters) {
 }
 
 static void task_coins(void *pvParameters) {
+	int seed = 0;
+    int n_coins = 0;
+    for (;;) {
+        if (xSemaphoreTake(xSemaphore, (TickType_t)500) == pdTRUE) {
+			// gera seed usando RTT
+			seed = rtt_read_timer_value(RTT);
+			printf("seed: %u\n", seed);
+            // gera n_coins aleatório
+            n_coins = generateRandomNumber(seed); 
+            // printa n_coins
+            printf("n_coins: %d\n", n_coins);
+
+			// envia n_coins para a queue
+			xQueueSend(xQueue, &n_coins, 0);
+        }
+    }
+}
+
+static void task_play(void *pvParameters) {
+	int n_coins = 0;
 	for (;;) {
-		if (xSemaphoreTake(xSemaphore, (TickType_t)500) == pdTRUE) {
-			tone(1000, 100);
+		if (xQueueReceive(xQueue, &n_coins, (TickType_t)500) == pdTRUE) {
+			printf("n_coins: %d\n", n_coins);
+			// toca o buzzer n_coins vezes
+			for (int i = 0; i < n_coins; i++) {
+				tone(NOTE_B5,  80);
+				tone(NOTE_E6, 640);
+				delay_ms(100);
+			}
 		}
 	}
 }
+
 
 /************************************************************************/
 /* funcoes                                                              */
@@ -188,6 +235,23 @@ void tone(int freq, int tempo) {
 	}
 }
 
+int generateRandomNumber(unsigned int seed) {
+    // Inicialize a semente do gerador de números aleatórios com a semente passada como argumento
+    srand(seed);
+
+    // Gere um número aleatório no intervalo de 0 a RAND_MAX
+    int random_num = rand();
+
+    // Mapeie o número aleatório para o intervalo de 1 a 3
+    int result = (random_num % 3) + 1;
+
+    // Imprima o valor da semente e o número gerado
+    printf("Semente: %u\n", seed);
+    printf("Número aleatório entre 1 e 3: %d\n", result);
+
+	return result;
+}
+
 void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource) {
 
 	uint16_t pllPreScale = (int)(((float)32768) / freqPrescale);
@@ -239,8 +303,18 @@ int main(void) {
 	sysclk_init();
 	board_init();
 
+	// inicia a contagem do RTT
+	RTT_init(1, 32768, RTT_MR_ALMIEN);
+
 	/* Create semaphore */
 	xSemaphore = xSemaphoreCreateBinary();
+
+	/* Create queue */
+	xQueue = xQueueCreate(32, sizeof(int));
+
+	if (xQueue == NULL) {
+		printf("Failed to create queue\r\n");
+	}
 
 	if (xSemaphore == NULL) {
 		printf("Failed to create semaphore\r\n");
@@ -264,6 +338,12 @@ int main(void) {
 	TASK_COINS_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create coins task\r\n");
 	}
+
+	if (xTaskCreate(task_play, "play", TASK_PLAY_STACK_SIZE, NULL,
+	TASK_PLAY_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create play task\r\n");
+	}
+
 
 	/* Start the scheduler. */
 	vTaskStartScheduler();
