@@ -85,7 +85,7 @@ QueueHandle_t xQueue = NULL;
 #define TASK_COINS_STACK_PRIORITY            (tskIDLE_PRIORITY)
 
 #define TASK_PLAY_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
-#define TASK_PLAY_STACK_PRIORITY            (tskIDLE_PRIORITY)
+#define TASK_PLAY_STACK_PRIORITY            (tskIDLE_PRIORITY + 1)
 
 
 
@@ -138,7 +138,9 @@ static void task_debug(void *pvParameters) {
 }
 
 static void task_coins(void *pvParameters) {
+	// Inicialize a semente do gerador de números aleatórios com a semente passada como argumento
 	int seed = 0;
+    srand(seed);
     int n_coins = 0;
     for (;;) {
         if (xSemaphoreTake(xSemaphore, (TickType_t)500) == pdTRUE) {
@@ -236,19 +238,11 @@ void tone(int freq, int tempo) {
 }
 
 int generateRandomNumber(unsigned int seed) {
-    // Inicialize a semente do gerador de números aleatórios com a semente passada como argumento
-    srand(seed);
-
     // Gere um número aleatório no intervalo de 0 a RAND_MAX
     int random_num = rand();
 
     // Mapeie o número aleatório para o intervalo de 1 a 3
     int result = (random_num % 3) + 1;
-
-    // Imprima o valor da semente e o número gerado
-    printf("Semente: %u\n", seed);
-    printf("Número aleatório entre 1 e 3: %d\n", result);
-
 	return result;
 }
 
