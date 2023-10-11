@@ -29,6 +29,12 @@ void btn_init(void);
 void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource);
 
 /************************************************************************/
+/* Semaphore                                                              */
+/************************************************************************/
+
+SemaphoreHandle_t xSemaphore = NULL;
+
+/************************************************************************/
 /* rtos vars                                                            */
 /************************************************************************/
 
@@ -63,7 +69,8 @@ extern void vApplicationMallocFailedHook(void) {
 /************************************************************************/
 
 void but_callback(void) {
-
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
 }
 
 
@@ -169,6 +176,16 @@ int main(void) {
 	/* Initialize the SAM system */
 	sysclk_init();
 	board_init();
+
+	/* Create semaphore */
+	xSemaphore = xSemaphoreCreateBinary();
+
+	if (xSemaphore == NULL) {
+		printf("Failed to create semaphore\r\n");
+	}
+
+	/* Initialize the buttons */
+	btn_init();
 
 	/* Initialize the console uart */
 	configure_console();
