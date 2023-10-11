@@ -304,7 +304,7 @@ int main(void) {
 	board_init();
 
 	// inicia a contagem do RTT
-	RTT_init(1, 32768, RTT_MR_ALMIEN);
+	RTT_init(1, 32768, 0);
 
 	/* Create semaphore */
 	xSemaphore = xSemaphoreCreateBinary();
