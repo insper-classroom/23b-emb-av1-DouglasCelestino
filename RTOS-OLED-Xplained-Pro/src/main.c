@@ -49,7 +49,7 @@ void but_callback(void);
 void but_callback(void);
 void but_callback(void);
 
-int generateRandomNumber(unsigned int seed);
+int generateRandomNumber();
 
 static void configure_console(void);
 static void task_debug(void *pvParameters);
@@ -138,25 +138,31 @@ static void task_debug(void *pvParameters) {
 }
 
 static void task_coins(void *pvParameters) {
-	// Inicialize a semente do gerador de números aleatórios com a semente passada como argumento
-	int seed = 0;
-    srand(seed);
-    int n_coins = 0;
-    for (;;) {
-        if (xSemaphoreTake(xSemaphore, (TickType_t)500) == pdTRUE) {
-			// gera seed usando RTT
-			seed = rtt_read_timer_value(RTT);
-			printf("seed: %u\n", seed);
-            // gera n_coins aleatório
-            n_coins = generateRandomNumber(seed); 
-            // printa n_coins
-            printf("n_coins: %d\n", n_coins);
+	const int freq = 10;
+	int seedSet = 0;
+	int time, coins;
 
-			// envia n_coins para a queue
-			xQueueSend(xQueue, &n_coins, 0);
-        }
-    }
+	RTT_init(10000, 0, 0);
+
+	for (;;) {
+		if (xSemaphoreTake(xSemaphore, portMAX_DELAY) != pdTRUE) {
+			continue;
+		}
+
+		if (!seedSet) {
+			int ticks = rtt_read_timer_value(RTT);
+			time = ticks / freq;
+			srand(time);
+			printf("seed: %d\n", time);
+			seedSet = 1;
+		}
+
+		coins = (rand() % 3) + 1;
+		xQueueSend(xQueue, &coins, portMAX_DELAY);
+	}
 }
+
+
 
 static void task_play(void *pvParameters) {
 	int n_coins = 0;
@@ -237,12 +243,12 @@ void tone(int freq, int tempo) {
 	}
 }
 
-int generateRandomNumber(unsigned int seed) {
-    // Gere um número aleatório no intervalo de 0 a RAND_MAX
-    int random_num = rand();
+int generateRandomNumber() {
+	// Gere um número aleatório no intervalo de 0 a RAND_MAX
+	int random_num = rand();
 
-    // Mapeie o número aleatório para o intervalo de 1 a 3
-    int result = (random_num % 3) + 1;
+	// Mapeie o número aleatório para o intervalo de 1 a 3
+	int result = (random_num % 3) + 1;
 	return result;
 }
 
