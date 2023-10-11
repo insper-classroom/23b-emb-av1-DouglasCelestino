@@ -19,6 +19,11 @@
 #define BTN_PIO_PIN 11
 #define BTN_PIO_PIN_MASK (1 << BTN_PIO_PIN)
 
+// BUZZER
+#define BUZZER_PIO PIOD
+#define BUZZER_PIO_ID ID_PIOD
+#define BUZZER_PIO_IDX 11
+#define BUZZER_PIO_IDX_MASK (1u << BUZZER_PIO_IDX)
 
 
 /************************************************************************/
@@ -27,6 +32,23 @@
 
 void btn_init(void);
 void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource);
+
+void set_buzzer();
+void clear_buzzer();
+
+static void BUZZER_init(void);
+
+void tone(int freq, int tempo);
+
+void but_callback(void);
+void but_callback(void);
+void but_callback(void);
+
+static void configure_console(void);
+static void task_debug(void *pvParameters);
+static void task_coins(void *pvParameters);
+
+
 
 /************************************************************************/
 /* Semaphore                                                              */
@@ -44,6 +66,10 @@ SemaphoreHandle_t xSemaphore = NULL;
 /************************************************************************/
 #define TASK_OLED_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
 #define TASK_OLED_STACK_PRIORITY            (tskIDLE_PRIORITY)
+
+#define TASK_COINS_STACK_SIZE                (1024*6/sizeof(portSTACK_TYPE))
+#define TASK_COINS_STACK_PRIORITY            (tskIDLE_PRIORITY)
+
 
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,  signed char *pcTaskName);
 extern void vApplicationIdleHook(void);
@@ -91,7 +117,13 @@ static void task_debug(void *pvParameters) {
 	}
 }
 
-
+static void task_coins(void *pvParameters) {
+	for (;;) {
+		if (xSemaphoreTake(xSemaphore, (TickType_t)500) == pdTRUE) {
+			tone(1000, 100);
+		}
+	}
+}
 
 /************************************************************************/
 /* funcoes                                                              */
@@ -125,6 +157,36 @@ void btn_init(void) {
 	NVIC_SetPriority(BTN_PIO_ID, 4); // Prioridade 4
 }
 
+
+static void BUZZER_init(void){
+	pmc_enable_periph_clk(BUZZER_PIO_ID);
+	pio_set_output(BUZZER_PIO, BUZZER_PIO_IDX_MASK, 0, 0, 0);
+}
+
+void set_buzzer() {
+	pio_set(BUZZER_PIO, BUZZER_PIO_IDX_MASK);
+}
+
+void clear_buzzer() {
+	pio_clear(BUZZER_PIO, BUZZER_PIO_IDX_MASK);
+}
+
+void tone(int freq, int tempo) {
+	int i;
+	if (freq == 0) {
+		delay_ms(tempo);
+		return;
+	}
+	int fim = freq * tempo / 1000;
+	int periodo = 1000000 / freq;
+	for (i = 0; i < fim; i++) {
+		
+		set_buzzer();
+		delay_us(periodo / 2);
+		clear_buzzer();
+		delay_us(periodo / 2);
+	}
+}
 
 void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource) {
 
@@ -187,12 +249,20 @@ int main(void) {
 	/* Initialize the buttons */
 	btn_init();
 
+	/* Initialize the buzzer */
+	BUZZER_init();
+
 	/* Initialize the console uart */
 	configure_console();
 	
 	if (xTaskCreate(task_debug, "debug", TASK_OLED_STACK_SIZE, NULL,
 	TASK_OLED_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create debug task\r\n");
+	}
+
+	if (xTaskCreate(task_coins, "coins", TASK_COINS_STACK_SIZE, NULL,
+	TASK_COINS_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create coins task\r\n");
 	}
 
 	/* Start the scheduler. */
